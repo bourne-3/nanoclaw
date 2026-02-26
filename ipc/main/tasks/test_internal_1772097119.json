@@ -1,0 +1,1 @@
+{"type": "schedule_task", "prompt": "请回复当前时间以确认 internal baseurl 连接正常", "schedule_type": "once", "schedule_value": "2026-02-26T09:12:09Z", "targetJid": "tg:8641311236"}
