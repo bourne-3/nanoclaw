@@ -1,8 +1,9 @@
 import TelegramBot from 'node-telegram-bot-api';
 
-import { ASSISTANT_NAME } from '../config.js';
+import { ASSISTANT_NAME, TELEGRAM_BOT_TOKEN } from '../config.js';
 import { logger } from '../logger.js';
 import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from '../types.js';
+import { ChannelOpts, registerChannel } from './registry.js';
 
 // Telegram JID prefix — distinguishes Telegram chat IDs from WhatsApp JIDs
 export const TG_PREFIX = 'tg:';
@@ -159,3 +160,9 @@ export class TelegramChannel implements Channel {
     await this.bot.stopPolling();
   }
 }
+
+// Register the Telegram channel factory
+registerChannel('telegram', (opts: ChannelOpts) => {
+  if (!TELEGRAM_BOT_TOKEN) return null;
+  return new TelegramChannel({ token: TELEGRAM_BOT_TOKEN, ...opts });
+});
