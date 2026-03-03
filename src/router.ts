@@ -10,10 +10,22 @@ export function escapeXml(s: string): string {
 }
 
 export function formatMessages(messages: NewMessage[]): string {
-  const lines = messages.map(
-    (m) =>
-      `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`,
-  );
+  const lines = messages.map((m) => {
+    let messageXml = `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`;
+
+    // Include images if present
+    if (m.images && m.images.length > 0) {
+      const imagesXml = m.images
+        .map(
+          (img) =>
+            `<image filename="${escapeXml(img.filename)}" mimeType="${escapeXml(img.mimeType)}">${img.base64}</image>`,
+        )
+        .join('\n');
+      messageXml = `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}" hasImages="true">${escapeXml(m.content)}\n${imagesXml}</message>`;
+    }
+
+    return messageXml;
+  });
   return `<messages>\n${lines.join('\n')}\n</messages>`;
 }
 

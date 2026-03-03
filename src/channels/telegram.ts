@@ -52,9 +52,7 @@ export class TelegramChannel implements Channel {
   }
 
   async connect(): Promise<void> {
-    this.bot.on('message', (msg) => {
-      if (!msg.text) return;
-
+    this.bot.on('message', async (msg) => {
       const chatId = msg.chat.id;
       const jid = toTgJid(chatId);
       const timestamp = new Date(msg.date * 1000).toISOString();
@@ -73,19 +71,55 @@ export class TelegramChannel implements Channel {
         .filter(Boolean)
         .join(' ') || msg.from?.username || sender;
 
-      const isBotMessage =
+      // Check for photos
+      const hasPhoto = msg.photo && msg.photo.length > 0;
+      const content = msg.text || msg.caption || '';
+
+      // Skip messages with no text and no photos
+      if (!content && !hasPhoto) return;
+
+      // Download photos if present
+      let images: { filename: string; mimeType: string; base64: string }[] | undefined;
+      if (hasPhoto && msg.photo) {
+        try {
+          // Get the largest photo (best quality)
+          const photo = msg.photo[msg.photo.length - 1];
+          const file = await this.bot.getFile(photo.file_id);
+          const fileUrl = `https://api.telegram.org/file/bot${this.opts.token}/${file.file_path}`;
+
+          // Download the file
+          const response = await fetch(fileUrl);
+          const buffer = await response.arrayBuffer();
+          const base64 = Buffer.from(buffer).toString('base64');
+
+          // Determine mime type
+          const ext = file.file_path?.split('.').pop() || 'jpg';
+          const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+          images = [{
+            filename: `telegram_${photo.file_id}.${ext}`,
+            mimeType,
+            base64,
+          }];
+        } catch (err) {
+          logger.warn({ err, chatId }, 'Failed to download Telegram photo');
+        }
+      }
+
+      const isBotMessage: boolean =
         msg.from?.is_bot === true ||
-        msg.text.startsWith(`${ASSISTANT_NAME}:`);
+        (!!content && content.startsWith(`${ASSISTANT_NAME}:`));
 
       this.opts.onMessage(jid, {
         id: String(msg.message_id),
         chat_jid: jid,
         sender,
         sender_name: senderName,
-        content: msg.text,
+        content,
         timestamp,
         is_from_me: false,
         is_bot_message: isBotMessage,
+        images,
       });
     });
 
