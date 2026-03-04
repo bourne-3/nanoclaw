@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     tesseract-ocr \
+    poppler-utils \
+    qpdf \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python requests library
