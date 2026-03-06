@@ -72,40 +72,10 @@ export class TelegramChannel implements Channel {
         .filter(Boolean)
         .join(' ') || msg.from?.username || sender;
 
-      // Check for photos
-      const hasPhoto = msg.photo && msg.photo.length > 0;
       const content = msg.text || msg.caption || '';
 
-      // Skip messages with no text and no photos
-      if (!content && !hasPhoto) return;
-
-      // Download photos if present
-      let images: { filename: string; mimeType: string; base64: string }[] | undefined;
-      if (hasPhoto && msg.photo) {
-        try {
-          // Get the largest photo (best quality)
-          const photo = msg.photo[msg.photo.length - 1];
-          const file = await this.bot.getFile(photo.file_id);
-          const fileUrl = `https://api.telegram.org/file/bot${this.opts.token}/${file.file_path}`;
-
-          // Download the file
-          const response = await fetch(fileUrl);
-          const buffer = await response.arrayBuffer();
-          const base64 = Buffer.from(buffer).toString('base64');
-
-          // Determine mime type
-          const ext = file.file_path?.split('.').pop() || 'jpg';
-          const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-
-          images = [{
-            filename: `telegram_${photo.file_id}.${ext}`,
-            mimeType,
-            base64,
-          }];
-        } catch (err) {
-          logger.warn({ err, chatId }, 'Failed to download Telegram photo');
-        }
-      }
+      // Skip messages with no text content
+      if (!content) return;
 
       const isBotMessage: boolean =
         msg.from?.is_bot === true ||
@@ -120,7 +90,6 @@ export class TelegramChannel implements Channel {
         timestamp,
         is_from_me: false,
         is_bot_message: isBotMessage,
-        images,
       });
     });
 

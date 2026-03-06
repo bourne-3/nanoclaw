@@ -10,7 +10,6 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   normalizeMessageContent,
   useMultiFileAuthState,
-  downloadMediaMessage,
   MessageUpsertType,
 } from '@whiskeysockets/baileys';
 
@@ -51,48 +50,6 @@ export class WhatsAppChannel implements Channel {
 
   constructor(opts: WhatsAppChannelOpts) {
     this.opts = opts;
-  }
-
-  /**
-   * Download images from a WhatsApp message
-   * Returns up to 3 images as base64 encoded objects
-   */
-  private async downloadMessageImages(
-    msg: Parameters<typeof downloadMediaMessage>[0],
-  ): Promise<{ filename: string; mimeType: string; base64: string }[]> {
-    const images: { filename: string; mimeType: string; base64: string }[] = [];
-    const normalized = normalizeMessageContent(msg.message || {});
-    if (!normalized) return images;
-
-    // Check for imageMessage
-    const imageMsg = normalized.imageMessage;
-    if (imageMsg) {
-      try {
-        const buffer = await downloadMediaMessage(
-          msg,
-          'buffer',
-          { },
-        );
-        // Determine MIME type from the image message
-        const mimeType = (imageMsg as { mimetype?: string }).mimetype || 'image/jpeg';
-        // Get file name from image message or generate one
-        const filename = (imageMsg as { fileName?: string }).fileName ||
-          `image_${Date.now()}.${mimeType.split('/')[1] || 'jpg'}`;
-
-        images.push({
-          filename,
-          mimeType,
-          base64: buffer.toString('base64'),
-        });
-      } catch (err) {
-        logger.warn({ err }, 'Failed to download image message');
-      }
-    }
-
-    // Check for videoMessage (we can extract thumbnail but not full video)
-    // For now, skip videos as they require different handling
-
-    return images.slice(0, 3); // Limit to 3 images
   }
 
   async connect(): Promise<void> {
@@ -254,15 +211,8 @@ export class WhatsAppChannel implements Channel {
               normalized.videoMessage?.caption ||
               '';
 
-            // Check if message has images
-            const hasImage = !!normalized.imageMessage;
-            const hasVideo = !!normalized.videoMessage;
-
-            // Skip protocol messages with no text content and no images (encryption keys, read receipts, etc.)
-            if (!content && !hasImage && !hasVideo) continue;
-
-            // Download images if present
-            const images = hasImage ? await this.downloadMessageImages(msg) : [];
+            // Skip protocol messages with no text content (encryption keys, read receipts, etc.)
+            if (!content) continue;
 
             const sender = msg.key.participant || msg.key.remoteJid || '';
             const senderName = msg.pushName || sender.split('@')[0];
@@ -285,7 +235,6 @@ export class WhatsAppChannel implements Channel {
               timestamp,
               is_from_me: fromMe,
               is_bot_message: isBotMessage,
-              images: images.length > 0 ? images : undefined,
             });
           }
         } catch (err) {

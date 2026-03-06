@@ -53,8 +53,6 @@ export interface NewMessage {
   timestamp: string;
   is_from_me?: boolean;
   is_bot_message?: boolean;
-  /** Base64-encoded images attached to the message */
-  images?: { filename: string; mimeType: string; base64: string }[];
 }
 
 export interface ScheduledTask {
