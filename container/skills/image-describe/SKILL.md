@@ -1,6 +1,6 @@
 ---
 name: image-describe
-description: Describe an image in detail using AI vision models. Supports model selection (gpt-4o-mini, gemini), and outputs beautiful Markdown with structured information.
+description: Describe an image in detail using AI vision models via Python script execution. Supports model selection (gpt-4o-mini, gemini), and outputs beautiful Markdown with structured information.
 allowed-tools: Bash(image-describe:*)
 ---
 
@@ -17,18 +17,23 @@ Use this skill when user wants to describe, analyze, or understand images. Trigg
 
 ```bash
 # Describe an image by file path
-image-describe /path/to/photo.jpg
+python3 /workspace/project/container/skills/image-describe/describe-images.py /path/to/photo.jpg
 
 # Use specific model
-image-describe --model gemini /path/to/photo.jpg
+python3 /workspace/project/container/skills/image-describe/describe-images.py --model gemini /path/to/photo.jpg
 ```
 
 ## Usage Pattern
 
 When user sends an image with description request:
 1. Save the image attachment to a temp path (e.g. `/tmp/photo.jpg`)
-2. Call `image-describe` with the file path
+2. Call Python script with the file path
 3. Return the formatted Markdown output
+
+Example:
+```bash
+python3 /workspace/project/container/skills/image-describe/describe-images.py /workspace/extra/desktop/微信图片_20260304192447_180_23.jpg
+```
 
 ## Supported Image Formats
 
@@ -40,7 +45,7 @@ When user sends an image with description request:
 | `.webp` | `image/webp` |
 | `.bmp` | `image/bmp` |
 
-The tool reads the file, detects the MIME type automatically, and converts to base64 internally before calling the API.
+The Python script reads the file, detects the MIME type automatically, and converts to base64 internally before calling the API.
 
 ## Models
 
@@ -52,7 +57,7 @@ The tool reads the file, detects the MIME type automatically, and converts to ba
 
 Specify model with `--model` flag:
 ```bash
-image-describe --model gemini /path/to/photo.jpg
+python3 /workspace/project/container/skills/image-describe/describe-images.py --model gemini /path/to/photo.jpg
 ```
 
 ## Output Format
@@ -66,12 +71,12 @@ The tool outputs beautiful Markdown with:
 
 ### Single Image
 ```bash
-image-describe /tmp/photo.jpg
+python3 /workspace/project/container/skills/image-describe/describe-images.py /tmp/photo.jpg
 ```
 
 ### Different Model
 ```bash
-image-describe --model gemini /tmp/photo.jpg
+python3 /workspace/project/container/skills/image-describe/describe-images.py --model gemini /tmp/photo.jpg
 ```
 
 ## Error Handling
@@ -79,3 +84,5 @@ image-describe --model gemini /tmp/photo.jpg
 - **File not found**: Returns a friendly error if the path does not exist
 - **Unsupported format**: Returns an error listing supported extensions
 - **API key invalid**: Outputs a message asking user to check VISION_API_KEY configuration
+
+Note: The script should be executed with Python 3, and the file path should be accessible from within the container environment.
