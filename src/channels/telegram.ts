@@ -2,7 +2,12 @@ import TelegramBot from 'node-telegram-bot-api';
 
 import { ASSISTANT_NAME, TELEGRAM_BOT_TOKEN } from '../config.js';
 import { logger } from '../logger.js';
-import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from '../types.js';
+import {
+  Channel,
+  OnInboundMessage,
+  OnChatMetadata,
+  RegisteredGroup,
+} from '../types.js';
 import { ChannelOpts, registerChannel } from './registry.js';
 
 // Telegram JID prefix — distinguishes Telegram chat IDs from WhatsApp JIDs
@@ -57,7 +62,8 @@ export class TelegramChannel implements Channel {
       const chatId = msg.chat.id;
       const jid = toTgJid(chatId);
       const timestamp = new Date(msg.date * 1000).toISOString();
-      const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+      const isGroup =
+        msg.chat.type === 'group' || msg.chat.type === 'supergroup';
       const chatName = msg.chat.title || msg.chat.username || String(chatId);
 
       // Always notify metadata for group discovery
@@ -68,9 +74,10 @@ export class TelegramChannel implements Channel {
       if (!groups[jid]) return;
 
       const sender = String(msg.from?.id || chatId);
-      const senderName = [msg.from?.first_name, msg.from?.last_name]
-        .filter(Boolean)
-        .join(' ') || msg.from?.username || sender;
+      const senderName =
+        [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') ||
+        msg.from?.username ||
+        sender;
 
       const content = msg.text || msg.caption || '';
 

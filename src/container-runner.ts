@@ -26,6 +26,7 @@ import {
   stopContainer,
 } from './container-runtime.js';
 import { detectAuthMode } from './credential-proxy.js';
+import { readEnvFile } from './env.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
@@ -144,10 +145,7 @@ function buildVolumeMounts(
     }),
   };
   if (!fs.existsSync(settingsFile)) {
-    fs.writeFileSync(
-      settingsFile,
-      JSON.stringify(settings, null, 2) + '\n',
-    );
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
   } else {
     // Merge with existing settings
     const existing = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
@@ -157,7 +155,9 @@ function buildVolumeMounts(
       env: { ...existing.env, ...settings.env },
       permissions: {
         ...existing.permissions,
-        deny: [...new Set([...(existing.permissions?.deny || []), ...denyTools])],
+        deny: [
+          ...new Set([...(existing.permissions?.deny || []), ...denyTools]),
+        ],
       },
     };
     fs.writeFileSync(settingsFile, JSON.stringify(merged, null, 2) + '\n');
@@ -258,10 +258,12 @@ function buildContainerArgs(
   // Pass third-party API keys that are not routed through the credential proxy.
   // ANTHROPIC_MODEL allows overriding the model used inside containers.
   // VISION_API_KEY is used by image-describe tool (360.cn Vision API).
-  const visionApiKey = process.env.VISION_API_KEY;
-  if (visionApiKey) args.push('-e', `VISION_API_KEY=${visionApiKey}`);
-  const anthropicModel = process.env.ANTHROPIC_MODEL;
-  if (anthropicModel) args.push('-e', `ANTHROPIC_MODEL=${anthropicModel}`);
+  // Use readEnvFile to load from .env (not process.env, which is empty at startup).
+  const envVars = readEnvFile(['VISION_API_KEY', 'ANTHROPIC_MODEL']);
+  if (envVars.VISION_API_KEY)
+    args.push('-e', `VISION_API_KEY=${envVars.VISION_API_KEY}`);
+  if (envVars.ANTHROPIC_MODEL)
+    args.push('-e', `ANTHROPIC_MODEL=${envVars.ANTHROPIC_MODEL}`);
 
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
