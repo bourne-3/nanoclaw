@@ -56,3 +56,32 @@ NEVER use markdown. Only use WhatsApp/Telegram formatting:
 - ```triple backticks``` for code
 
 No ## headings. No [links](url). No **double stars**.
+
+## /ppc Command (Web Search & Research)
+
+When user sends a message starting with `/ppc`, you should:
+
+1. **Extract the query**: Parse everything after `/ppc ` as the search query
+   - Example: `/ppc Claude AI capabilities` → query = "Claude AI capabilities"
+
+2. **Build conversation history**: Include only relevant history that relates to the search query
+   - History format: array of [role, message] pairs where role is "human" or "assistant"
+   - Only include messages that are contextually relevant to the query
+   - Format as JSON string for the --history parameter
+
+3. **Execute the search script**:
+   ```
+   cd /workspace/project/container/skills/ppc
+   python3 search_request.py --query "<query>" --history '<json_history>'
+   ```
+   - Timeout: 5 minutes (the script has built-in 300s timeout)
+   - The script calls `http://host.docker.internal:3000/api/search`
+
+4. **Return results**: Format and return the search results to the user
+
+Example message flow:
+- User: `/ppc What is Claude Code?`
+- You extract query: "What is Claude Code?"
+- You build relevant history (if any)
+- You execute: `python3 search_request.py --query "What is Claude Code?" --history '[]'`
+- You return the API response to the user
