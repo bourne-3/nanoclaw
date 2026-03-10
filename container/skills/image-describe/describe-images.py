@@ -4,7 +4,7 @@ Image Description Tool for NanoClaw
 Uses 360.cn Vision API to describe images in detail.
 
 Usage:
-  describe-images [--model MODEL] [--max-images N] [image_base64...]
+  describe-images [--model MODEL] <image_path>
 
 Environment:
   VISION_API_KEY - API key for 360.cn Vision API
@@ -16,10 +16,11 @@ Models:
 
 import base64
 import json
+import mimetypes
 import os
+import re
 import sys
-import concurrent.futures
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 
 import requests
 
@@ -34,52 +35,82 @@ def get_api_key() -> str:
     return api_key
 
 
-def describe_single_image(
-    base64_data: str,
-    model: str,
-    api_key: str,
-    image_index: int,
-) -> Dict[str, Any]:
+def image_path_to_base64(image_path: str) -> tuple[str, str]:
     """
-    Describe a single image using the Vision API.
+    Read an image file and return (base64_data, mime_type).
 
     Args:
-        base64_data: Base64-encoded image data
+        image_path: Absolute or relative path to the image file
+
+    Returns:
+        Tuple of (base64_encoded_string, mime_type)
+
+    Raises:
+        FileNotFoundError: If the file does not exist
+        ValueError: If the file is not a supported image type
+    """
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"图片文件不存在: {image_path}")
+
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if not mime_type or not mime_type.startswith("image/"):
+        ext = os.path.splitext(image_path)[1].lower()
+        ext_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
+        }
+        mime_type = ext_map.get(ext)
+        if not mime_type:
+            raise ValueError(f"不支持的图片格式: {image_path}")
+
+    with open(image_path, "rb") as f:
+        base64_data = base64.b64encode(f.read()).decode("utf-8")
+
+    return base64_data, mime_type
+
+
+def describe_image(image_path: str, model: str, api_key: str) -> Dict[str, Any]:
+    """
+    Describe an image using the Vision API.
+
+    Args:
+        image_path: Path to the image file
         model: Model to use (gpt-4o-mini or gemini)
         api_key: API key for authentication
-        image_index: Index of the image for logging
 
     Returns:
         Dict with description and metadata
     """
+    try:
+        base64_data, mime_type = image_path_to_base64(image_path)
+    except (FileNotFoundError, ValueError) as e:
+        return {"error": str(e)}
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
-   }
+    }
 
-    # Build the prompt for detailed image description
-    prompt = """请用中文详细描述这张照片。尝试识别和描述：
-1. 场景：这是在哪里拍摄的？室内还是室外？
-2. 主要物体：照片中最重要的物体或元素是什么？
-3. 人物（如果有）：年龄、表情、动作、服装特点
-4. 情绪：这张照片传达出什么情绪？
-5. 光线：光线条件如何？自然光还是人工光？
-6. 颜色：主要颜色有哪些？色调是暖还是冷？
-7. 文字内容：照片中是否有文字？如果有，写的是什么？
-8. 构图：主体在哪里？是否使用了三分法、对称或其他构图技巧？
+    prompt = """请用中文分析这张图片，提取所有有价值的信息。
+
+分析要点：
+1. 图片类型：判断这是什么类型的图片（如：照片、发票、收据、病历、报告、截图、证件、表格、图表等）
+2. 主要内容：图片中包含哪些核心内容或元素
+3. 文字信息：完整提取图片中所有可见文字（金额、日期、姓名、编号等关键数据需单独列出）
+4. 结构信息：如果是文档类图片，描述其结构和布局
+5. 详细描述：对图片内容做完整、客观的描述
 
 请以JSON格式输出，包含以下字段：
-- "场景": 简短描述
-- "主要物体": 物体列表
-- "人物特征": 人物描述（如果有）
-- "情绪": 情绪描述
-- "光线": 光线描述
-- "颜色": 颜色描述
-- "文字内容": 照片中的文字（如果有）
-- "构图": 构图分析
-- "详细描述": 200字左右的详细描述"""
+- "图片类型": 图片的类型或用途
+- "主要内容": 核心内容概述
+- "文字信息": 图片中提取的所有关键文字和数据
+- "结构信息": 文档结构或布局描述（非文档类图片可省略）
+- "详细描述": 对图片内容的完整描述"""
 
-    # Build request payload
     payload = {
         "model": model,
         "messages": [
@@ -90,7 +121,7 @@ def describe_single_image(
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_data}"
+                            "url": f"data:{mime_type};base64,{base64_data}"
                         },
                     },
                 ],
@@ -101,141 +132,60 @@ def describe_single_image(
     }
 
     try:
-        response = requests.post(
-            API_ENDPOINT,
-            headers=headers,
-            json=payload,
-            timeout=60,
-        )
+        response = requests.post(API_ENDPOINT, headers=headers, json=payload, timeout=60)
 
         if response.status_code == 401:
-            return {
-                "error": "API key无效或已过期，请检查VISION_API_KEY配置",
-                "image_index": image_index,
-            }
+            return {"error": "API key无效或已过期，请检查VISION_API_KEY配置"}
 
         response.raise_for_status()
 
-        result = response.json()
-        content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        content = response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
 
-        # Try to parse JSON from the response
         try:
-            # Find JSON in the response (may be wrapped in markdown)
-            import re
             json_match = re.search(r'\{[\s\S]*\}', content)
-            if json_match:
-                description = json.loads(json_match.group())
-            else:
-                description = {"详细描述": content}
+            description = json.loads(json_match.group()) if json_match else {"详细描述": content}
         except json.JSONDecodeError:
-            # If JSON parsing fails, use the raw content
             description = {"详细描述": content}
 
-        return {
-            "description": description,
-            "raw_response": content,
-            "image_index": image_index,
-        }
+        return {"description": description}
 
     except requests.exceptions.Timeout:
-        return {
-            "error": f"图片 {image_index + 1} 描述超时，请稍后重试",
-            "image_index": image_index,
-        }
+        return {"error": "请求超时，请稍后重试"}
     except requests.exceptions.RequestException as e:
-        return {
-            "error": f"图片 {image_index + 1} 描述失败: {str(e)}",
-            "image_index": image_index,
-        }
+        return {"error": f"请求失败: {str(e)}"}
 
 
-def format_markdown_output(results: List[Dict[str, Any]]) -> str:
-    """
-    Format the description results as beautiful Markdown.
+def format_markdown_output(result: Dict[str, Any]) -> str:
+    """Format the description result as Markdown."""
+    if "error" in result:
+        return f"## ⚠️ 错误\n\n{result['error']}\n"
 
-    Args:
-        results: List of description results
+    desc = result.get("description", {})
+    lines = []
 
-    Returns:
-        Formatted Markdown string
-    """
-    output_lines = []
+    detailed = desc.get("详细描述", "")
+    if detailed:
+        lines.append(detailed)
+        lines.append("")
 
-    # Filter out errors
-    successful = [r for r in results if "error" not in r]
-    errors = [r for r in results if "error" in r]
+    lines.append("### 关键信息")
+    lines.append("")
 
-    for i, result in enumerate(successful):
-        desc = result.get("description", {})
-        idx = result.get("image_index", i)
+    key_fields = [
+        ("图片类型", "图片类型"),
+        ("主要内容", "主要内容"),
+        ("文字信息", "文字信息"),
+        ("结构信息", "结构信息"),
+    ]
 
-        output_lines.append(f"## 📷 图片 {idx + 1}")
-        output_lines.append("")
+    for field_key, label in key_fields:
+        value = desc.get(field_key)
+        if value:
+            if isinstance(value, list):
+                value = ", ".join(value)
+            lines.append(f"- **{label}**: {value}")
 
-        # Detailed description
-        detailed = desc.get("详细描述", "")
-        if detailed:
-            output_lines.append(detailed)
-            output_lines.append("")
-
-        # Key points as bullet list
-        output_lines.append("### 关键信息")
-        output_lines.append("")
-
-        # Extract key info
-        key_points = []
-
-        scene = desc.get("场景")
-        if scene:
-            key_points.append(f"**场景**: {scene}")
-
-        main_objects = desc.get("主要物体")
-        if main_objects:
-            if isinstance(main_objects, list):
-                main_objects = ", ".join(main_objects)
-            key_points.append(f"**主要物体**: {main_objects}")
-
-        people = desc.get("人物特征")
-        if people:
-            key_points.append(f"**人物**: {people}")
-
-        mood = desc.get("情绪")
-        if mood:
-            key_points.append(f"**情绪**: {mood}")
-
-        lighting = desc.get("光线")
-        if lighting:
-            key_points.append(f"**光线**: {lighting}")
-
-        colors = desc.get("颜色")
-        if colors:
-            key_points.append(f"**颜色**: {colors}")
-
-        text_content = desc.get("文字内容")
-        if text_content:
-            key_points.append(f"**文字内容**: {text_content}")
-
-        composition = desc.get("构图")
-        if composition:
-            key_points.append(f"**构图**: {composition}")
-
-        for point in key_points:
-            output_lines.append(f"- {point}")
-
-        output_lines.append("")
-        output_lines.append("---")
-        output_lines.append("")
-
-    # Add errors at the end if any
-    if errors:
-        output_lines.append("## ⚠️ 错误")
-        output_lines.append("")
-        for err in errors:
-            output_lines.append(f"- {err['error']}")
-        output_lines.append("")
-
-    return "\n".join(output_lines)
+    return "\n".join(lines)
 
 
 def main():
@@ -246,9 +196,8 @@ def main():
         print(__doc__)
         sys.exit(0)
 
-    # Parse arguments
-    model = "gpt-4o-mini"  # Default model
-    base64_images = []
+    model = "gpt-4o-mini"
+    image_path = None
 
     i = 0
     while i < len(args):
@@ -256,25 +205,17 @@ def main():
         if arg == "--model" and i + 1 < len(args):
             model = args[i + 1]
             i += 2
-        elif arg == "--max-images" and i + 1 < len(args):
-            # Skip, we handle max images internally
-            i += 2
         elif arg.startswith("-"):
-            i += 1  # Skip unknown flags
+            i += 1
         else:
-            # Assume it's a base64 string
-            base64_images.append(arg)
+            image_path = arg
             i += 1
 
-    # Limit to 3 images
-    base64_images = base64_images[:3]
-
-    if not base64_images:
-        print("Error: No images provided", file=sys.stderr)
+    if not image_path:
+        print("Error: No image path provided", file=sys.stderr)
         print(__doc__, file=sys.stderr)
         sys.exit(1)
 
-    # Validate model
     valid_models = ["gpt-4o-mini", "gpt-4o", "gemini"]
     if model not in valid_models:
         print(f"Warning: Unknown model '{model}', using gpt-4o-mini", file=sys.stderr)
@@ -286,35 +227,8 @@ def main():
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Process images concurrently (max 3 at a time)
-    results = []
-
-    # Use ThreadPoolExecutor for concurrent API calls
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [
-            executor.submit(
-                describe_single_image,
-                img_data,
-                model,
-                api_key,
-                idx,
-            )
-            for idx, img_data in enumerate(base64_images)
-        ]
-
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                results.append({"error": str(e)})
-
-    # Sort results by image index
-    results.sort(key=lambda x: x.get("image_index", 0))
-
-    # Format and output
-    output = format_markdown_output(results)
-    print(output)
+    result = describe_image(image_path, model, api_key)
+    print(format_markdown_output(result))
 
 
 if __name__ == "__main__":

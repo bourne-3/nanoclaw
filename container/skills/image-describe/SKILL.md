@@ -1,6 +1,6 @@
 ---
 name: image-describe
-description: Describe images in detail using AI vision models. Supports multiple images (max 3), model selection (gpt-4o-mini, gemini), and outputs beautiful Markdown with structured information.
+description: Describe an image in detail using AI vision models. Supports model selection (gpt-4o-mini, gemini), and outputs beautiful Markdown with structured information.
 allowed-tools: Bash(image-describe:*)
 ---
 
@@ -16,31 +16,31 @@ Use this skill when user wants to describe, analyze, or understand images. Trigg
 ## Quick Start
 
 ```bash
-# Describe images (pass base64 directly)
-image-describe <base64_image_data>
+# Describe an image by file path
+image-describe /path/to/photo.jpg
 
 # Use specific model
-image-describe --model gemini <base64_image_data>
-
-# Multiple images (max 3)
-image-describe <img1_base64> <img2_base64> <img3_base64>
+image-describe --model gemini /path/to/photo.jpg
 ```
 
 ## Usage Pattern
 
-When user sends images with description request:
-1. Extract base64 from the `<image>` tags in the message XML
-2. Call `image-describe` with the base64 data
+When user sends an image with description request:
+1. Save the image attachment to a temp path (e.g. `/tmp/photo.jpg`)
+2. Call `image-describe` with the file path
 3. Return the formatted Markdown output
 
-## Image Data Format
+## Supported Image Formats
 
-Images are passed as base64 strings in the message:
-```
-<image filename="photo.jpg" mimeType="image/jpeg">BASE64_DATA_HERE</image>
-```
+| Extension | MIME Type |
+|-----------|-----------|
+| `.jpg` / `.jpeg` | `image/jpeg` |
+| `.png` | `image/png` |
+| `.gif` | `image/gif` |
+| `.webp` | `image/webp` |
+| `.bmp` | `image/bmp` |
 
-Extract the BASE64_DATA_HERE and pass to image-describe.
+The tool reads the file, detects the MIME type automatically, and converts to base64 internally before calling the API.
 
 ## Models
 
@@ -52,7 +52,7 @@ Extract the BASE64_DATA_HERE and pass to image-describe.
 
 Specify model with `--model` flag:
 ```bash
-image-describe --model gemini <base64>
+image-describe --model gemini /path/to/photo.jpg
 ```
 
 ## Output Format
@@ -66,19 +66,16 @@ The tool outputs beautiful Markdown with:
 
 ### Single Image
 ```bash
-image-describe iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
-```
-
-### Multiple Images
-```bash
-image-describe iVBORw0KGgo... iVBORw0KGgo... iVBORw0KGgo...
+image-describe /tmp/photo.jpg
 ```
 
 ### Different Model
 ```bash
-image-describe --model gemini iVBORw0KGgo...
+image-describe --model gemini /tmp/photo.jpg
 ```
 
 ## Error Handling
 
-If API key is invalid or expired, the tool will output a friendly error message asking user to check VISION_API_KEY configuration.
+- **File not found**: Returns a friendly error if the path does not exist
+- **Unsupported format**: Returns an error listing supported extensions
+- **API key invalid**: Outputs a message asking user to check VISION_API_KEY configuration
