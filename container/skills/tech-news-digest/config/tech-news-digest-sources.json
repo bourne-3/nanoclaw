@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "id": "agents-radar-rss",
+      "type": "rss",
+      "name": "Agents Radar",
+      "url": "https://duanyytop.github.io/agents-radar/feed.xml",
+      "enabled": true,
+      "priority": true,
+      "topics": ["ai-agent"],
+      "note": "AI Agent 资讯和更新"
+    }
+  ]
+}
